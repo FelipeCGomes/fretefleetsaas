@@ -1,23 +1,23 @@
 export class FreightView {
     constructor() {
         this.map = null;
-        this.markers = [];     // Marcadores de clientes
-        this.routeLayers = []; // Linhas de rota
-        this.originLayer = null; // Marcador da origem
-        this.radiusLayer = null; // Círculo do raio
+        this.markers = [];
+        this.routeLayers = [];
+        this.originLayer = null;
+        this.radiusLayers = [];
         this.initMap();
     }
 
     initMap() {
         if (document.getElementById('map')) {
-            this.map = L.map('map').setView([-23.5505, -46.6333], 10); // Default SP
+            this.map = L.map('map').setView([-23.5505, -46.6333], 10);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap'
             }).addTo(this.map);
         }
     }
 
-    // --- FUNÇÕES DE LIMPEZA E ESTADO ---
+    // --- FUNÇÕES GERAIS ---
     setLoading(ativo, texto = "Carregando...") {
         const modal = document.getElementById('loadingModal');
         const backdrop = document.getElementById('loadingBackdrop');
@@ -65,376 +65,34 @@ export class FreightView {
         });
     }
 
-    // --- MAPA: ELEMENTOS VISUAIS ---
+    // --- MAPA ---
 
     limparMapa() {
-        // Remove tudo exceto o tile layer base
         this.markers.forEach(m => this.map.removeLayer(m));
         this.routeLayers.forEach(l => this.map.removeLayer(l));
+        this.radiusLayers.forEach(r => this.map.removeLayer(r));
         if (this.originLayer) this.map.removeLayer(this.originLayer);
-        if (this.radiusLayer) this.map.removeLayer(this.radiusLayer);
 
         this.markers = [];
         this.routeLayers = [];
+        this.radiusLayers = [];
         this.originLayer = null;
-        this.radiusLayer = null;
     }
 
-    desenharOrigem(lat, lon, nome, raioKm) {
-        if (!lat || !lon) return;
+    limparPreview() {
+        this.limparMapa();
+    }
 
-        // 1. Pino da Origem (Vermelho ou Ícone de Armazém)
+    desenharOrigem(lat, lon, nome) {
+        if (!lat || !lon) return;
         const icon = L.divIcon({
             html: '<i class="fas fa-warehouse fa-2x text-danger" style="text-shadow: 2px 2px 2px white;"></i>',
             className: 'custom-div-icon',
             iconSize: [30, 30],
             iconAnchor: [15, 30]
         });
-
-        this.originLayer = L.marker([lat, lon], { icon: icon }).addTo(this.map)
-            .bindPopup(`<b>Origem:</b> ${nome}`).openPopup();
-
-        // 2. Círculo do Raio
-        if (raioKm > 0) {
-            this.radiusLayer = L.circle([lat, lon], {
-                color: '#3388ff',
-                fillColor: '#3388ff',
-                fillOpacity: 0.1,
-                radius: raioKm * 1000 // Metros
-            }).addTo(this.map);
-            // Ajusta o zoom para caber o raio
-            this.map.fitBounds(this.radiusLayer.getBounds());
-        } else {
-            this.map.setView([lat, lon], 12);
-        }
-    }
-
-    desenharRota(viagem) {
-        // Limpa anteriores
-        this.routeLayers.forEach(l => this.map.removeLayer(l));
-        this.markers.forEach(m => this.map.removeLayer(m));
-        this.routeLayers = [];
-        this.markers = [];
-
-        if (!viagem || !viagem.destinos) return;
-
-        // Desenha Marcadores
-        viagem.destinos.forEach((d, i) => {
-            const icon = L.divIcon({
-                html: `<div class="badge bg-primary rounded-circle border border-white" style="width:24px;height:24px;line-height:20px;font-size:12px;">${i + 1}</div>`,
-                className: 'marker-count-icon',
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
-            });
-
-            const content = `
-                <div style="min-width: 200px; font-size: 0.85rem; line-height: 1.5;">
-                    <div class="border-bottom pb-1 mb-1 fw-bold text-primary">Entrega #${i + 1}</div>
-                    <strong>N° Pedido:</strong> ${d.pedido}<br>
-                    <strong>Cliente:</strong> ${d.cliente}<br>
-                    <strong>Supervisor:</strong> ${d.supervisor || '--'}<br>
-                    <strong>Peso:</strong> ${d.peso} kg<br>
-                    <strong>Bairro:</strong> ${d.bairro || '--'}<br>
-                    <strong>Cidade/UF:</strong> ${d.cidade}/${d.uf}<br>
-                    <strong>Status:</strong> ${d.status || '--'}
-                </div>
-            `;
-
-            const m = L.marker([d.lat, d.lon], { icon }).addTo(this.map).bindPopup(content);
-            this.markers.push(m);
-        });
-
-        // Desenha Linhas (Mantido igual)
-        if (viagem.rota && viagem.rota.geometryIda) {
-            const coords = L.GeoJSON.coordsToLatLngs(viagem.rota.geometryIda.coordinates);
-            const poly = L.polyline(coords, { color: 'blue', weight: 5, opacity: 0.7 }).addTo(this.map);
-            this.routeLayers.push(poly);
-            this.map.fitBounds(poly.getBounds().pad(0.1));
-
-            if (viagem.destinos.length > 0 && viagem.origem) {
-                const last = viagem.destinos[viagem.destinos.length - 1];
-                const returnLine = L.polyline(
-                    [[last.lat, last.lon], [viagem.origem.lat, viagem.origem.lon]],
-                    { color: 'green', dashArray: '10, 10', weight: 4, opacity: 0.8 }
-                ).addTo(this.map);
-                this.routeLayers.push(returnLine);
-            }
-        }
-    }
-
-    // 3. PENDENTES (Pontos Verdes)
-    desenharPendentesMap(backlog) {
-        backlog.forEach(p => {
-            if (p.lat && p.lon) {
-                const icon = L.divIcon({
-                    html: '<i class="fas fa-circle text-success" style="font-size:10px; border:1px solid white; border-radius:50%;"></i>',
-                    className: 'backlog-icon',
-                    iconSize: [10, 10]
-                });
-
-                const content = `
-                    <div style="min-width: 200px; font-size: 0.85rem; line-height: 1.5;">
-                        <div class="border-bottom pb-1 mb-1 fw-bold text-danger">Pendente (Não Roteirizado)</div>
-                        <strong>Motivo:</strong> ${p.motivo}<br>
-                        <hr class="my-1">
-                        <strong>N° Pedido:</strong> ${p.pedido}<br>
-                        <strong>Cliente:</strong> ${p.cliente}<br>
-                        <strong>Supervisor:</strong> ${p.supervisor || '--'}<br>
-                        <strong>Peso:</strong> ${p.peso} kg<br>
-                        <strong>Bairro:</strong> ${p.bairro || '--'}<br>
-                        <strong>Cidade/UF:</strong> ${p.cidade}/${p.uf}<br>
-                        <strong>Status:</strong> ${p.status || '--'}
-                    </div>
-                `;
-
-                const m = L.marker([p.lat, p.lon], { icon }).addTo(this.map).bindPopup(content);
-                this.markers.push(m);
-            }
-        });
-    }
-
-    desenharPendentesMap(backlog) {
-        // Mostra os pontos verdes no mapa para quem ficou de fora
-        backlog.forEach(p => {
-            if (p.lat && p.lon) {
-                const icon = L.divIcon({
-                    html: '<i class="fas fa-circle text-success" style="font-size:10px; border:1px solid white; border-radius:50%;"></i>',
-                    className: 'backlog-icon',
-                    iconSize: [10, 10]
-                });
-                const m = L.marker([p.lat, p.lon], { icon }).addTo(this.map)
-                    .bindPopup(`<b>Pendente:</b> ${p.cliente}<br>${p.motivo}`);
-                this.markers.push(m);
-            }
-        });
-    }
-
-    // --- RENDERIZAÇÃO DE INTERFACE (CARDS) ---
-
-    renderizarResultados(cache, frota) {
-        const container = document.getElementById('resultsContainer');
-        if (!container || !cache) return;
-        container.innerHTML = '';
-
-        if (cache.viagens.length === 0) {
-            container.innerHTML = '<div class="text-center mt-5">Nenhuma rota gerada. Verifique os pendentes.</div>';
-            return;
-        }
-
-        cache.viagens.forEach((v, idx) => {
-            const destinosHtml = v.destinos.map((d, i) => `
-                <tr class="draggable-row" data-id="${d.id}">
-                    <td style="width:30px;"><span class="badge bg-secondary rounded-pill">${i + 1}</span></td>
-                    <td><div class="fw-bold small text-truncate" style="max-width:120px;">${d.cliente}</div><div class="x-small text-muted">${d.cidade}</div></td>
-                    <td class="text-end small">${d.peso}kg</td>
-                    <td class="text-end"><button class="btn btn-link text-danger p-0 btn-remove-order" data-trip="${idx}" data-ped="${i}"><i class="fas fa-times"></i></button></td>
-                </tr>
-            `).join('');
-
-            const optionsVeiculo = frota.map(f => `<option value="${f.tipo}" ${f.tipo === v.veiculo.tipo ? 'selected' : ''}>${f.tipo}</option>`).join('');
-
-            // Calculo Estimado de Pedágio (R$ 0,15 por eixo a cada 100km - Exemplo simples visual)
-            const pedagioEstimado = v.rota ? (v.rota.distKm * 0.15 * v.veiculo.eixos).toFixed(2) : '0.00';
-
-            container.innerHTML += `
-                <div class="card mb-3 shadow-sm trip-card border-0" data-idx="${idx}">
-                    <div class="card-header py-2 ${v.ocupacaoPct > 100 ? 'bg-danger text-white' : 'bg-primary text-white'}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="fw-bold"><i class="fas fa-route"></i> Rota ${idx + 1}</div>
-                            <select class="form-select form-select-sm select-vehicle-change text-dark" data-trip-idx="${idx}" style="width:120px; font-size:0.8rem;">
-                                ${optionsVeiculo}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body p-2 bg-light">
-                        <div class="row g-1 text-center mb-2 small">
-                            <div class="col-3 border-end">
-                                <div class="text-muted x-small">Entregas</div>
-                                <div class="fw-bold text-dark">${v.destinos.length}</div>
-                            </div>
-                            <div class="col-3 border-end">
-                                <div class="text-muted x-small">Distância</div>
-                                <div class="fw-bold text-dark">${v.rota ? v.rota.distKm.toFixed(1) : 0} km</div>
-                            </div>
-                            <div class="col-3 border-end">
-                                <div class="text-muted x-small">Diesel</div>
-                                <div class="fw-bold text-dark">R$ ${v.rota ? v.rota.custoDiesel.toFixed(0) : 0}</div>
-                            </div>
-                            <div class="col-3">
-                                <div class="text-muted x-small">Total</div>
-                                <div class="fw-bold text-success">R$ ${v.rota ? v.rota.custoTotal.toFixed(0) : 0}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between px-2 mb-2 x-small text-muted border-top pt-1">
-                            <span><i class="fas fa-weight-hanging"></i> ${v.pesoTotal}kg (${v.ocupacaoPct.toFixed(0)}%)</span>
-                            <span><i class="fas fa-road"></i> Pedágio (Est): R$ ${pedagioEstimado}</span>
-                        </div>
-
-                        <div class="table-responsive bg-white border rounded" style="max-height: 150px; overflow-y: auto;">
-                            <table class="table table-sm table-hover mb-0 table-orders">
-                                <tbody>${destinosHtml}</tbody>
-                            </table>
-                        </div>
-                        
-                        <div class="d-flex justify-content-end mt-2">
-                            <button class="btn btn-sm btn-outline-dark btn-print w-100" data-idx="${idx}"><i class="fas fa-print me-1"></i> Imprimir Manifesto</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        // Reativa Drag and Drop
-        document.querySelectorAll('.table-orders tbody').forEach((el, tripIdx) => {
-            new Sortable(el, {
-                animation: 150,
-                ghostClass: 'bg-light',
-                handle: '.draggable-row', // Pode arrastar pela linha
-                onEnd: (evt) => {
-                    document.dispatchEvent(new CustomEvent('routeOrderChanged', {
-                        detail: { tripIdx: tripIdx, oldIdx: evt.oldIndex, newIdx: evt.newIndex }
-                    }));
-                }
-            });
-        });
-    }
-
-    desenharPendentes(backlog) {
-        const container = document.getElementById('backlogContainer');
-        const badge = document.getElementById('backlogBadge');
-        if (!container) return;
-
-        badge.innerText = backlog.length;
-        if (backlog.length === 0) {
-            container.innerHTML = '<div class="text-center text-muted mt-5 opacity-50"><i class="fas fa-check-circle fa-3x mb-3"></i><p class="small">Tudo roteirizado!</p></div>';
-            return;
-        }
-
-        container.innerHTML = backlog.map((p, i) => `
-            <div class="backlog-item p-2 mb-2 bg-white border-start border-4 border-warning shadow-sm">
-                <div class="d-flex justify-content-between">
-                    <strong class="text-truncate" style="max-width:150px;">${p.pedido}</strong>
-                    <span class="badge bg-light text-dark border">${p.peso}kg</span>
-                </div>
-                <div class="small text-muted text-truncate">${p.cliente}</div>
-                <div class="x-small text-danger mt-1">Motivo: ${p.motivo}</div>
-            </div>
-        `).join('');
-    }
-
-    // --- MANTIDOS (Config, Tabelas, Excel, etc) ---
-    renderizarListaLocais(locais) {
-        const lista = document.getElementById('savedLocationsList');
-        if (!lista) return;
-        lista.innerHTML = '';
-        if (!locais || !locais.length) { lista.innerHTML = '<div class="text-center p-3 text-muted small">Nenhum local salvo.</div>'; return; }
-        locais.forEach(l => {
-            lista.innerHTML += `
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div><strong>${l.nome}</strong><br><small class="text-muted">${l.lat.toFixed(4)}, ${l.lon.toFixed(4)}</small></div>
-                    <div class="d-flex gap-1"><button class="btn btn-outline-primary btn-sm btn-confirm-origin" data-lat="${l.lat}" data-lon="${l.lon}" data-name="${l.nome}"><i class="fas fa-check"></i></button><button class="btn btn-outline-danger btn-sm btn-remove-loc" data-id="${l.id}"><i class="fas fa-trash"></i></button></div>
-                </div>`;
-        });
-    }
-
-    preencherConfig(conf, frota) {
-        if (conf) {
-            if (document.getElementById('radiusInput')) document.getElementById('radiusInput').value = conf.radiusKm || 200;
-            if (document.getElementById('dieselPrice')) document.getElementById('dieselPrice').value = conf.dieselPrice || 6.00;
-            if (document.getElementById('unloadTime')) document.getElementById('unloadTime').value = conf.unloadTime || 45;
-        }
-        this.renderizarTabelaFrota(frota);
-    }
-
-    renderizarTabelaFrota(frota) {
-        const tbody = document.getElementById('fleetTableBody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        if (!frota) return;
-        frota.forEach((v) => {
-            tbody.innerHTML += `
-                <tr>
-                    <td><input type="checkbox" checked disabled></td>
-                    <td class="text-start fw-bold">${v.tipo}</td>
-                    <td><input type="number" class="form-control form-control-sm text-center p-0" value="${v.capKg}" disabled></td>
-                    <td><input type="number" class="form-control form-control-sm text-center p-0" value="${v.qtd}"></td>
-                    <td><input type="number" class="form-control form-control-sm text-center p-0" value="${v.maxStops}"></td>
-                    <td><input type="number" class="form-control form-control-sm text-center p-0" value="${v.custoFixo}"></td>
-                    <td><input type="number" class="form-control form-control-sm text-center p-0" value="${v.consumo}"></td>
-                    <td><input type="number" class="form-control form-control-sm text-center p-0" value="${v.eixos}" disabled></td>
-                </tr>
-            `;
-        });
-    }
-
-    obterConfigGlobal() {
-        return {
-            radiusKm: parseFloat(document.getElementById('radiusInput')?.value) || 200,
-            dieselPrice: parseFloat(document.getElementById('dieselPrice')?.value) || 6.00,
-            unloadTime: parseFloat(document.getElementById('unloadTime')?.value) || 45,
-            roundtrip: document.getElementById('returnToOrigin')?.checked || false,
-            prioritizeSmall: document.getElementById('prioritizeSmall')?.checked || false
-        };
-    }
-
-    obterConfigFrota(frotaOriginal) {
-        const linhas = document.querySelectorAll('#fleetTableBody tr');
-        const novaFrota = [];
-        linhas.forEach((tr, i) => {
-            const inputs = tr.querySelectorAll('input');
-            const v = { ...frotaOriginal[i] };
-            v.qtd = parseInt(inputs[2].value);
-            v.maxStops = parseInt(inputs[3].value);
-            v.custoFixo = parseFloat(inputs[4].value);
-            v.consumo = parseFloat(inputs[5].value);
-            novaFrota.push(v);
-        });
-        return novaFrota;
-    }
-
-    mostrarModalSelecao(locais) {
-        const list = document.getElementById('modalOriginList');
-        if (!list) return;
-        list.innerHTML = '';
-        locais.forEach(l => {
-            list.innerHTML += `<button class="list-group-item list-group-item-action btn-confirm-origin" data-lat="${l.lat}" data-lon="${l.lon}" data-name="${l.nome}"><strong>${l.nome}</strong></button>`;
-        });
-        new bootstrap.Modal(document.getElementById('originModal')).show();
-    }
-
-    async solicitarFiltroStatus(statusList) {
-        return new Promise(resolve => {
-            const list = document.getElementById('statusFilterList');
-            list.innerHTML = statusList.map(s => `
-                <div class="form-check">
-                    <input class="form-check-input status-chk" type="checkbox" value="${s}" id="st_${s}" checked>
-                    <label class="form-check-label small" for="st_${s}">${s || '(Vazio)'}</label>
-                </div>
-            `).join('');
-            const modalEl = document.getElementById('statusModal');
-            const modal = new bootstrap.Modal(modalEl);
-            const btnConfirm = document.getElementById('btnConfirmStatus');
-            const newBtn = btnConfirm.cloneNode(true);
-            btnConfirm.parentNode.replaceChild(newBtn, btnConfirm);
-            newBtn.onclick = () => {
-                const selected = Array.from(document.querySelectorAll('.status-chk:checked')).map(cb => cb.value);
-                modal.hide();
-                resolve(selected);
-            };
-            document.getElementById('btnCancelStatus').onclick = () => { modal.hide(); resolve(null); };
-            modal.show();
-        });
-    }
-
-    renderizarTabelaDados(pedidos) {
-        const tbody = document.querySelector('#dataTable tbody');
-        if (!tbody) return;
-        tbody.innerHTML = pedidos.map(p => `<tr><td>${p.pedido}</td><td>${p.supervisor}</td><td>${p.cliente}</td><td>${p.bairro}</td><td>${p.cidade}/${p.uf}</td><td>${p.peso}</td><td>${p.agendado ? 'SIM' : ''}</td><td>${p.status}</td></tr>`).join('');
-    }
-
-    limparPreview() {
-        this.limparMapa();
+        this.originLayer = L.marker([lat, lon], { icon }).addTo(this.map).bindPopup(`<b>Origem / CD</b><br>${nome}`).openPopup();
+        this.map.setView([lat, lon], 12);
     }
 
     adicionarPontoPreview(p) {
@@ -463,32 +121,237 @@ export class FreightView {
         }
     }
 
-    imprimirManifesto(viagem, idx) {
-        const w = window.open('', '', 'width=800,height=600');
-        w.document.write(`
-            <html><head><title>Manifesto Rota ${idx + 1}</title>
-            <style>body{font-family:sans-serif; padding:20px;} table{width:100%; border-collapse:collapse; margin-top:20px;} th,td{border:1px solid #ddd; padding:8px; text-align:left;} th{background-color:#f2f2f2;}</style>
-            </head><body>
-            <h2>Manifesto de Carga - Rota ${idx + 1}</h2>
-            <p><strong>Veículo:</strong> ${viagem.veiculo.tipo} | <strong>Peso Total:</strong> ${viagem.pesoTotal}kg</p>
-            <p><strong>Custo Estimado:</strong> R$ ${viagem.rota ? viagem.rota.custoTotal.toFixed(2) : '0.00'}</p>
-            <table>
-                <thead><tr><th>Seq</th><th>Pedido</th><th>Cliente</th><th>Endereço</th><th>Cidade</th><th>Peso</th></tr></thead>
-                <tbody>
-                    ${viagem.destinos.map((d, i) => `<tr><td>${i + 1}</td><td>${d.pedido}</td><td>${d.cliente}</td><td>${d.endereco}</td><td>${d.cidade}</td><td>${d.peso}kg</td></tr>`).join('')}
-                </tbody>
-            </table>
-            <script>window.print();</script>
-            </body></html>
-        `);
-        w.document.close();
-    }
+    desenharRota(viagem, configGlobal) {
+        this.limparMapa();
+        if (viagem.origem) this.desenharOrigem(viagem.origem.lat, viagem.origem.lon, 'Origem');
 
-    setupSobre() {
-        if (document.getElementById('btnOpenAbout')) {
-            document.getElementById('btnOpenAbout').onclick = () => {
-                this.showModal(`<h5>FreteCalc SaaS</h5><p>Versão 2.5 (Visual Master)</p><p>Desenvolvido para gestão logística.</p>`);
-            };
+        if (!viagem || !viagem.destinos) return;
+
+        if (viagem.destinos.length > 0) {
+            const primeira = viagem.destinos[0];
+            const raioKm = configGlobal ? configGlobal.radiusKm : 100;
+            const circulo = L.circle([primeira.lat, primeira.lon], {
+                color: '#3388ff', fillColor: '#3388ff', fillOpacity: 0.1, radius: raioKm * 1000
+            }).addTo(this.map);
+            this.radiusLayers.push(circulo);
+        }
+
+        viagem.destinos.forEach((d, i) => {
+            const icon = L.divIcon({
+                html: `<div class="badge bg-primary rounded-circle border border-white" style="width:24px;height:24px;line-height:20px;font-size:12px;">${i + 1}</div>`,
+                className: 'marker-count-icon', iconSize: [24, 24], iconAnchor: [12, 12]
+            });
+
+            const content = `
+                <div style="min-width: 200px; font-size: 0.85rem; line-height: 1.5;">
+                    <div class="border-bottom pb-1 mb-1 fw-bold text-primary">Entrega #${i + 1}</div>
+                    <strong>N° Pedido:</strong> ${d.pedido}<br>
+                    <strong>Cliente:</strong> ${d.cliente}<br>
+                    <strong>Supervisor:</strong> ${d.supervisor || '--'}<br>
+                    <strong>Peso:</strong> ${d.peso} kg<br>
+                    <strong>Bairro:</strong> ${d.bairro || '--'}<br>
+                    <strong>Cidade/UF:</strong> ${d.cidade}/${d.uf}<br>
+                    <strong>Status:</strong> ${d.status || '--'}
+                </div>
+            `;
+            const m = L.marker([d.lat, d.lon], { icon }).addTo(this.map).bindPopup(content);
+            this.markers.push(m);
+        });
+
+        if (viagem.rota && viagem.rota.geometryIda) {
+            const coords = L.GeoJSON.coordsToLatLngs(viagem.rota.geometryIda.coordinates);
+            const poly = L.polyline(coords, { color: 'blue', weight: 5, opacity: 0.7 }).addTo(this.map);
+            this.routeLayers.push(poly);
+            this.map.fitBounds(poly.getBounds().pad(0.1));
         }
     }
+
+    desenharPendentesMap(backlog) {
+        backlog.forEach(p => {
+            if (p.lat && p.lon) {
+                const icon = L.divIcon({
+                    html: '<i class="fas fa-circle text-success" style="font-size:10px; border:1px solid white; border-radius:50%;"></i>',
+                    className: 'backlog-icon', iconSize: [10, 10]
+                });
+
+                const content = `
+                    <div style="min-width: 200px; font-size: 0.85rem; line-height: 1.5;">
+                        <div class="border-bottom pb-1 mb-1 fw-bold text-danger">Pendente (Não Roteirizado)</div>
+                        <strong>Motivo:</strong> ${p.motivo}<br>
+                        <hr class="my-1">
+                        <strong>N° Pedido:</strong> ${p.pedido}<br>
+                        <strong>Cliente:</strong> ${p.cliente}<br>
+                        <strong>Supervisor:</strong> ${p.supervisor || '--'}<br>
+                        <strong>Peso:</strong> ${p.peso} kg<br>
+                        <strong>Bairro:</strong> ${p.bairro || '--'}<br>
+                        <strong>Cidade/UF:</strong> ${p.cidade}/${p.uf}<br>
+                        <strong>Status:</strong> ${p.status || '--'}
+                    </div>
+                `;
+                const m = L.marker([p.lat, p.lon], { icon }).addTo(this.map).bindPopup(content);
+                this.markers.push(m);
+            }
+        });
+    }
+
+    renderizarResultados(cache, frota) {
+        const container = document.getElementById('resultsContainer');
+        if (!container || !cache) return;
+        container.innerHTML = '';
+
+        if (cache.viagens.length === 0) {
+            container.innerHTML = '<div class="text-center mt-5">Nenhuma rota gerada. Verifique os pendentes.</div>';
+            return;
+        }
+
+        cache.viagens.forEach((v, idx) => {
+            const destinosHtml = v.destinos.map((d, i) => `
+                <tr class="draggable-row" data-id="${d.id}">
+                    <td style="width:30px;"><span class="badge bg-secondary rounded-pill">${i + 1}</span></td>
+                    <td>
+                        <div class="fw-bold small text-truncate" style="max-width:140px;">${d.cliente}</div>
+                        <div class="x-small text-muted">${d.cidade} | ${d.bairro || ''}</div>
+                    </td>
+                    <td class="text-end small">${d.peso}kg</td>
+                    <td class="text-end">
+                        <button class="btn btn-link text-danger p-0 btn-remove-order" data-trip="${idx}" data-ped="${i}"><i class="fas fa-times"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+
+            const optionsVeiculo = frota.map(f => `<option value="${f.tipo}" ${f.tipo === v.veiculo.tipo ? 'selected' : ''}>${f.tipo}</option>`).join('');
+            const pedagioEstimado = v.rota ? (v.rota.distKm * 0.15 * v.veiculo.eixos).toFixed(2) : '0.00';
+
+            container.innerHTML += `
+                <div class="card mb-3 shadow-sm trip-card border-0" data-idx="${idx}">
+                    <div class="card-header py-2 ${v.ocupacaoPct > 100 ? 'bg-danger text-white' : 'bg-primary text-white'}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="fw-bold"><i class="fas fa-route"></i> Rota ${idx + 1}</div>
+                            <select class="form-select form-select-sm select-vehicle-change text-dark" data-trip-idx="${idx}" style="width:120px; font-size:0.8rem;">
+                                ${optionsVeiculo}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body p-2 bg-light">
+                        <div class="row g-1 text-center mb-2 small bg-white border rounded py-1 mx-0">
+                            <div class="col-3 border-end">
+                                <div class="text-muted x-small">Entregas</div><div class="fw-bold text-dark">${v.destinos.length}</div>
+                            </div>
+                            <div class="col-3 border-end">
+                                <div class="text-muted x-small">Km</div><div class="fw-bold text-dark">${v.rota ? v.rota.distKm.toFixed(1) : 0}</div>
+                            </div>
+                            <div class="col-3 border-end">
+                                <div class="text-muted x-small">Diesel</div><div class="fw-bold text-dark">R$ ${v.rota ? v.rota.custoDiesel.toFixed(0) : 0}</div>
+                            </div>
+                            <div class="col-3">
+                                <div class="text-muted x-small">Custo</div><div class="fw-bold text-success">R$ ${v.rota ? v.rota.custoTotal.toFixed(0) : 0}</div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between px-2 mb-2 x-small text-muted">
+                            <span><i class="fas fa-weight-hanging"></i> ${v.pesoTotal}kg (${v.ocupacaoPct.toFixed(0)}%)</span>
+                            <span><i class="fas fa-road"></i> Pedágio: R$ ${pedagioEstimado}</span>
+                        </div>
+                        <div class="table-responsive bg-white border rounded" style="max-height: 200px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0 table-orders"><tbody>${destinosHtml}</tbody></table>
+                        </div>
+                        <div class="d-flex justify-content-end mt-2">
+                            <button class="btn btn-sm btn-outline-dark btn-print w-100" data-idx="${idx}"><i class="fas fa-print me-1"></i> Manifesto</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        document.querySelectorAll('.table-orders tbody').forEach((el, tripIdx) => {
+            new Sortable(el, {
+                animation: 150, ghostClass: 'bg-light', handle: '.draggable-row',
+                onEnd: (evt) => {
+                    document.dispatchEvent(new CustomEvent('routeOrderChanged', { detail: { tripIdx: tripIdx, oldIdx: evt.oldIndex, newIdx: evt.newIndex } }));
+                }
+            });
+        });
+    }
+
+    // --- CORREÇÃO AQUI: INPUT DE ROTA MANUAL ---
+    desenharPendentes(backlog) {
+        const container = document.getElementById('backlogContainer');
+        const badge = document.getElementById('backlogBadge');
+        if (!container) return;
+        badge.innerText = backlog.length;
+        if (backlog.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted mt-5 opacity-50"><i class="fas fa-check-circle fa-3x mb-3"></i><p class="small">Tudo roteirizado!</p></div>';
+            return;
+        }
+
+        container.innerHTML = backlog.map((p, i) => `
+            <div class="backlog-item p-2 mb-2 bg-white border-start border-4 border-warning shadow-sm">
+                <div class="d-flex justify-content-between">
+                    <strong class="text-truncate" style="max-width:150px;">${p.pedido}</strong>
+                    <span class="badge bg-light text-dark border">${p.peso}kg</span>
+                </div>
+                <div class="small text-muted text-truncate">${p.cliente}</div>
+                <div class="x-small text-danger mt-1">Motivo: ${p.motivo}</div>
+                
+                <div class="input-group input-group-sm mt-2 pt-1 border-top">
+                    <span class="input-group-text bg-white border-0 small text-muted ps-0">Mover p/ Rota:</span>
+                    <input type="number" class="form-control text-center rounded-start" id="manualRoute_${i}" placeholder="#" min="1" style="max-width: 60px;">
+                    <button class="btn btn-outline-success btn-manual-add" data-ped-idx="${i}" title="Adicionar à Rota"><i class="fas fa-check"></i></button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    renderizarListaLocais(l) {
+        const el = document.getElementById('savedLocationsList'); if (!el) return;
+        el.innerHTML = l.map(x => `<div class="list-group-item d-flex justify-content-between"><div>${x.nome}</div><div><button class="btn btn-sm btn-primary btn-confirm-origin" data-name="${x.nome}" data-lat="${x.lat}" data-lon="${x.lon}">Usar</button> <button class="btn btn-sm btn-danger btn-remove-loc" data-id="${x.id}">X</button></div></div>`).join('');
+    }
+
+    preencherConfig(c, f) {
+        if (c) {
+            document.getElementById('radiusInput').value = c.radiusKm || 200;
+            document.getElementById('dieselPrice').value = c.dieselPrice || 6;
+        }
+        this.renderizarTabelaFrota(f);
+    }
+
+    renderizarTabelaFrota(f) {
+        document.getElementById('fleetTableBody').innerHTML = f.map(v => `<tr><td><input type="checkbox" checked disabled></td><td>${v.tipo}</td><td><input value="${v.capKg}" disabled class="form-control form-control-sm"></td><td><input value="${v.qtd}" class="form-control form-control-sm"></td><td><input value="${v.maxStops}" class="form-control form-control-sm"></td><td><input value="${v.custoFixo}" class="form-control form-control-sm"></td><td><input value="${v.consumo}" class="form-control form-control-sm"></td><td><input value="${v.eixos}" disabled class="form-control form-control-sm"></td></tr>`).join('');
+    }
+
+    obterConfigFrota(o) {
+        const trs = document.querySelectorAll('#fleetTableBody tr'); const n = [];
+        trs.forEach((tr, i) => { const inp = tr.querySelectorAll('input'); const v = { ...o[i] }; v.qtd = parseInt(inp[2].value); v.maxStops = parseInt(inp[3].value); v.custoFixo = parseFloat(inp[4].value); v.consumo = parseFloat(inp[5].value); n.push(v); });
+        return n;
+    }
+
+    obterConfigGlobal() {
+        return { radiusKm: parseFloat(document.getElementById('radiusInput').value) || 200, dieselPrice: parseFloat(document.getElementById('dieselPrice').value) || 6, unloadTime: 45, roundtrip: document.getElementById('returnToOrigin').checked };
+    }
+
+    renderizarTabelaDados(p) {
+        document.querySelector('#dataTable tbody').innerHTML = p.map(x => `<tr><td>${x.pedido}</td><td>${x.supervisor}</td><td>${x.cliente}</td><td>${x.bairro}</td><td>${x.cidade}/${x.uf}</td><td>${x.peso}</td><td>${x.agendado ? 'SIM' : ''}</td><td>${x.status}</td></tr>`).join('');
+    }
+
+    mostrarModalSelecao(l) {
+        const el = document.getElementById('modalOriginList');
+        el.innerHTML = l.map(x => `<button class="list-group-item btn-confirm-origin" data-name="${x.nome}" data-lat="${x.lat}" data-lon="${x.lon}">${x.nome}</button>`).join('');
+        new bootstrap.Modal(document.getElementById('originModal')).show();
+    }
+
+    async solicitarFiltroStatus(s) {
+        return new Promise(r => {
+            document.getElementById('statusFilterList').innerHTML = s.map(x => `<div class="form-check"><input type="checkbox" class="form-check-input status-chk" value="${x}" checked> ${x}</div>`).join('');
+            const m = new bootstrap.Modal(document.getElementById('statusModal'));
+            document.getElementById('btnConfirmStatus').onclick = () => { r(Array.from(document.querySelectorAll('.status-chk:checked')).map(c => c.value)); m.hide(); };
+            m.show();
+        });
+    }
+
+    imprimirManifesto(v, i) {
+        const w = window.open('', '', 'width=800,height=600');
+        w.document.write(`<h3>Rota ${i + 1}</h3><ul>${v.destinos.map(d => `<li>${d.pedido} - ${d.cliente}</li>`).join('')}</ul>`);
+        w.document.close(); w.print();
+    }
+
+    setupSobre() { }
 }

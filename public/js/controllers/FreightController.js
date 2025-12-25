@@ -49,9 +49,7 @@ class FreightController {
             if (user.teamId) {
                 this.model.iniciarSincronizacao(user.uid, user.teamId);
             }
-
             this.verificarConvites(user);
-
         } else {
             if (userInfo) userInfo.innerHTML = 'Saindo...';
         }
@@ -310,7 +308,7 @@ class FreightController {
         });
     }
 
-    // --- INICIALIZAÇÃO DOS RECURSOS (EXCEL, MAPA, CÁLCULO) ---
+    // --- INICIALIZAÇÃO E EVENTOS ---
     init() {
         document.addEventListener('dataSynced', () => {
             this.view.renderizarListaLocais(this.model.locaisSalvos);
@@ -378,54 +376,65 @@ class FreightController {
             }
         });
 
-        // --- AQUI ESTAVA O QUE FALTAVA (EXCEL) ---
+        // --- IMPORTAÇÃO DE PEDIDOS (CORRIGIDO LOADING) ---
         document.getElementById('excelInput')?.addEventListener('change', async e => {
             if (!e.target.files.length) return;
             try {
-                this.view.setLoading(true, "Processando...");
+                // 1. Mostra Loading imediatamente
+                this.view.setLoading(true, "Processando Planilha...");
+                // Pequeno delay para garantir que o modal apareça antes do travamento da thread
                 await new Promise(r => setTimeout(r, 200));
 
                 const json = await this.model.lerExcel(e.target.files[0]);
                 const todos = this.model.processarPlanilha ? this.model.processarPlanilha(json) : [];
-                if (todos.length === 0) throw new Error("Vazio.");
+                if (todos.length === 0) throw new Error("A planilha está vazia ou ilegível.");
 
-                this.view.setLoading(false);
+                this.view.setLoading(false); // Esconde loading para mostrar o modal de status
+
                 const statusUnicos = [...new Set(todos.map(p => p.status || ''))].sort();
                 const sel = await this.view.solicitarFiltroStatus(statusUnicos);
-                if (!sel) { e.target.value = ''; return; }
 
-                this.view.setLoading(true, "Geocodificando...");
+                if (!sel) {
+                    e.target.value = ''; // Limpa input se cancelar
+                    return;
+                }
+
+                // 2. Loading novamente para geocodificação
+                this.view.setLoading(true, "Geocodificando Endereços...");
+
                 this.todosPedidos = todos.filter(p => sel.includes(p.status || ''));
                 this.view.renderizarTabelaDados(this.todosPedidos);
 
                 this.pedidosGeocodificados = await this.model.geocodificarLote(this.todosPedidos, pct => {
-                    const el = document.getElementById('loadingModalText'); if (el) el.innerText = `${pct}%`;
+                    const el = document.getElementById('loadingModalText');
+                    if (el) el.innerText = `Processando: ${pct}%`;
                 });
 
                 if (this.pedidosGeocodificados.length > 0 && this.model.salvarAprendizado) {
-                    this.view.setLoading(true, "Salvando endereços...");
                     await this.model.salvarAprendizado();
-                    this.view.setLoading(false);
                 }
 
                 this.view.limparPreview();
                 this.pedidosGeocodificados.forEach(p => this.view.adicionarPontoPreview(p));
                 this.view.focarMapaNosPontos();
+
                 this.view.setLoading(false);
-                this.view.showToast(`${this.todosPedidos.length} carregados.`);
+                this.view.showToast(`${this.todosPedidos.length} pedidos carregados.`);
+
             } catch (err) {
                 this.view.setLoading(false);
                 console.error(err);
-                this.view.showModal("Erro: " + err.message);
+                this.view.showModal("Erro ao processar: " + err.message);
+            } finally {
+                // Importante: Limpa o input para permitir re-upload do mesmo arquivo
+                e.target.value = '';
             }
         });
 
-        // --- AQUI ESTAVA O QUE FALTAVA (CALCULAR) ---
         document.getElementById('btnCalcular')?.addEventListener('click', () => this.processar());
         document.addEventListener('click', e => this.handleActions(e));
         document.addEventListener('change', e => this.handleChangeActions(e));
 
-        // DRAG & DROP
         document.addEventListener('routeOrderChanged', async (e) => {
             const { tripIdx, oldIdx, newIdx } = e.detail;
             const viagem = this.resultadoCache.viagens[tripIdx];
@@ -446,14 +455,14 @@ class FreightController {
         }
     }
 
-    // --- LÓGICA DE PROCESSAMENTO (QUE FALTAVA NO SEU CÓDIGO) ---
+    // --- CÁLCULO E ROTAS ---
     async processar() {
         const inputVal = document.getElementById('origemInput').value;
-        if (!inputVal) return this.view.showModal("Informe origem");
-        if (!this.pedidosGeocodificados.length) return this.view.showModal("Importe excel");
+        if (!inputVal) return this.view.showModal("Informe o ponto de origem.");
+        if (!this.pedidosGeocodificados.length) return this.view.showModal("Importe uma planilha primeiro.");
 
         try {
-            this.view.setLoading(true, "Calculando...");
+            this.view.setLoading(true, "Otimizando Rotas...");
             await new Promise(r => setTimeout(r, 500));
 
             let origem;
@@ -463,31 +472,32 @@ class FreightController {
                 origem = await this.model.buscarCoordenadas(inputVal);
             }
 
-            if (!origem) throw new Error("Origem não encontrada");
+            if (!origem) throw new Error("Origem não encontrada. Verifique o endereço.");
 
             const frota = this.view.obterConfigFrota(this.model.frotaDefault);
             const conf = this.view.obterConfigGlobal();
 
-            // Lógica
             this.resultadoCache = await this.model.gerarViagensInteligentes(origem, this.pedidosGeocodificados, frota, conf, pct => {
-                const el = document.getElementById('loadingModalText'); if (el) el.innerText = `${pct}%`;
+                const el = document.getElementById('loadingModalText');
+                if (el) el.innerText = `Roteirizando: ${pct}%`;
             });
 
-            // Visuais
             this.view.limparMapa();
-            this.view.desenharOrigem(origem.lat, origem.lon, inputVal, conf.radiusKm);
+            this.view.desenharOrigem(origem.lat, origem.lon, inputVal);
             this.view.desenharPendentes(this.resultadoCache.backlog);
             this.view.desenharPendentesMap(this.resultadoCache.backlog);
 
+            // Roteirização via API (OSRM)
             for (let i = 0; i < this.resultadoCache.viagens.length; i++) {
-                await new Promise(r => setTimeout(r, 50));
+                // Delay para não sobrecarregar a API pública
+                await new Promise(r => setTimeout(r, 100));
                 this.resultadoCache.viagens[i].rota = await this.model.roteirizarViagem(this.resultadoCache.viagens[i], conf);
             }
 
             this.view.renderizarResultados(this.resultadoCache, this.model.frotaDefault);
 
             if (this.resultadoCache.viagens.length > 0) {
-                this.view.desenharRota(this.resultadoCache.viagens[0]);
+                this.view.desenharRota(this.resultadoCache.viagens[0], conf);
             }
 
         } catch (e) {
@@ -507,15 +517,15 @@ class FreightController {
                     this.resultadoCache.viagens.splice(idx, 1);
                 } else {
                     viagem.rota = await this.model.roteirizarViagem(viagem, conf);
-                    this.view.desenharRota(viagem);
+                    this.view.desenharRota(viagem, conf);
                 }
-                // Importante: Redesenha a lista para atualizar a numeração (1, 2, 3...)
                 this.view.renderizarResultados(this.resultadoCache, this.model.frotaDefault);
             }
         } catch (e) { } finally { this.view.setLoading(false); }
     }
 
     async handleActions(e) {
+        // A. REMOVER PEDIDO DA ROTA
         const btnRemove = e.target.closest('.btn-remove-order');
         if (btnRemove) {
             e.stopPropagation();
@@ -524,20 +534,60 @@ class FreightController {
             if (await this.view.showConfirm("Remover pedido?")) {
                 const pedido = this.resultadoCache.viagens[t].destinos.splice(p, 1)[0];
                 this.resultadoCache.viagens[t].pesoTotal -= pedido.peso;
-                this.resultadoCache.backlog.push({ ...pedido, motivo: 'Removido' });
+                this.resultadoCache.backlog.push({ ...pedido, motivo: 'Removido Manualmente' });
                 this.verificarTrocaVeiculoAuto(this.resultadoCache.viagens[t]);
                 this.view.desenharPendentes(this.resultadoCache.backlog);
+                this.view.desenharPendentesMap(this.resultadoCache.backlog);
                 await this.recalcularRota(t);
             }
             return;
         }
+
+        // B. ADICIONAR PEDIDO MANUALMENTE (NOVO RECURSO)
+        const btnManualAdd = e.target.closest('.btn-manual-add');
+        if (btnManualAdd) {
+            e.stopPropagation();
+            const pedIdx = +btnManualAdd.dataset.pedIdx;
+            const input = document.getElementById(`manualRoute_${pedIdx}`);
+            const rotaNum = parseInt(input.value);
+
+            // Validações
+            if (!rotaNum || rotaNum < 1 || !this.resultadoCache || rotaNum > this.resultadoCache.viagens.length) {
+                return this.view.showToast("Número da rota inválido.", "error");
+            }
+
+            const tripIdx = rotaNum - 1;
+            const viagemDestino = this.resultadoCache.viagens[tripIdx];
+
+            // Move do Backlog para a Rota
+            const pedido = this.resultadoCache.backlog.splice(pedIdx, 1)[0];
+            viagemDestino.destinos.push(pedido);
+            viagemDestino.pesoTotal += pedido.peso;
+
+            // Feedback Visual
+            this.view.showToast(`Pedido ${pedido.pedido} movido para Rota ${rotaNum}`);
+
+            // Atualiza tudo
+            this.verificarTrocaVeiculoAuto(viagemDestino);
+            this.view.desenharPendentes(this.resultadoCache.backlog);
+            this.view.desenharPendentesMap(this.resultadoCache.backlog);
+            await this.recalcularRota(tripIdx);
+            return;
+        }
+
+        // C. IMPRIMIR E SELEÇÃO DE CARD (MANTIDOS)
         const btnPrint = e.target.closest('.btn-print');
-        if (btnPrint) { e.stopPropagation(); this.view.imprimirManifesto(this.resultadoCache.viagens[+btnPrint.dataset.idx], +btnPrint.dataset.idx); return; }
+        if (btnPrint) {
+            e.stopPropagation();
+            this.view.imprimirManifesto(this.resultadoCache.viagens[+btnPrint.dataset.idx], +btnPrint.dataset.idx);
+            return;
+        }
+
         const card = e.target.closest('.trip-card');
-        if (card && !e.target.matches('select') && !e.target.closest('button')) {
+        if (card && !e.target.matches('select') && !e.target.closest('button') && !e.target.matches('input')) {
             const idx = +card.dataset.idx;
-            const viagem = this.resultadoCache.viagens[idx];
-            this.view.desenharRota(viagem);
+            const conf = this.view.obterConfigGlobal();
+            this.view.desenharRota(this.resultadoCache.viagens[idx], conf);
             document.querySelectorAll('.trip-card').forEach(c => c.classList.remove('border-primary', 'border-2'));
             card.classList.add('border-primary', 'border-2');
         }
@@ -564,7 +614,7 @@ class FreightController {
         if (veiculoIdeal.tipo !== viagem.veiculo.tipo) {
             viagem.veiculo = { ...veiculoIdeal };
             viagem.ocupacaoPct = (viagem.pesoTotal / viagem.veiculo.capKg) * 100;
-            this.view.showToast(`Veículo ajustado: ${veiculoIdeal.tipo}`);
+            this.view.showToast(`Veículo ajustado para: ${veiculoIdeal.tipo}`);
         }
     }
 }

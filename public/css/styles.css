@@ -15,56 +15,30 @@ html, body {
 
 .main-layout { display: flex; flex-direction: row; height: 100vh; width: 100vw; transition: all 0.3s ease; }
 
-/* --- NOVO: MODO TELA CHEIA PARA A SIDEBAR (ESCONDE MAPA) --- */
-.main-layout.sidebar-full-width .map-container {
-    display: none !important;
-}
-.main-layout.sidebar-full-width .sidebar-container {
-    width: 100% !important;
-    max-width: 100% !important;
-    border-right: none;
-}
-.main-layout.sidebar-full-width .dragbar {
-    display: none !important;
-}
+/* MODO TELA CHEIA (SIDEBAR) */
+.main-layout.sidebar-full-width .map-container { display: none !important; }
+.main-layout.sidebar-full-width .sidebar-container { width: 100% !important; max-width: 100% !important; border-right: none; }
+.main-layout.sidebar-full-width .dragbar { display: none !important; }
 
 /* =========================================
    2. ANIMAÇÕES
    ========================================= */
-@keyframes slideUpFade {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-enter {
-    animation: slideUpFade 0.5s ease forwards;
-    opacity: 0; 
-}
+@keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.animate-enter { animation: slideUpFade 0.5s ease forwards; opacity: 0; }
 
 /* =========================================
    3. SIDEBAR (PAINEL LATERAL)
    ========================================= */
 .sidebar-container { 
-    width: 450px; 
-    min-width: 350px; 
-    display: flex; 
-    flex-direction: column; 
-    background: #ffffff; 
-    z-index: 1050; 
-    border-right: 1px solid #e0e0e0; 
-    box-shadow: 4px 0 20px rgba(0,0,0,0.05);
-    height: 100%; 
-    transition: width 0.3s ease; /* Animação suave ao expandir */
+    width: 450px; min-width: 350px; display: flex; flex-direction: column; 
+    background: #ffffff; z-index: 1050; border-right: 1px solid #e0e0e0; 
+    box-shadow: 4px 0 20px rgba(0,0,0,0.05); height: 100%; transition: width 0.3s ease;
 }
-
 .tab-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; background-color: #f8f9fa; }
 .tab-pane { height: 100%; width: 100%; display: none; }
 .tab-pane.active { display: flex !important; flex-direction: column; }
 .scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px; min-height: 0; }
-
-.dragbar { 
-    background-color: #dee2e6; width: 5px; cursor: col-resize; height: 100%; z-index: 1100; transition: all 0.2s; flex-shrink: 0; 
-}
+.dragbar { background-color: #dee2e6; width: 5px; cursor: col-resize; height: 100%; z-index: 1100; transition: all 0.2s; flex-shrink: 0; }
 .dragbar:hover, .dragbar:active { background-color: #0d6efd; width: 7px; }
 
 /* =========================================
@@ -72,49 +46,22 @@ html, body {
    ========================================= */
 .map-container { flex-grow: 1; position: relative; height: 100%; min-width: 0; }
 #map { width: 100%; height: 100%; background: #eef2f6; }
-
-.autocomplete-list { 
-    position: absolute; top: 100%; left: 0; right: 0; z-index: 2000; max-height: 250px; 
-    overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 0 0 8px 8px; 
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: none; animation: slideUpFade 0.2s ease;
-}
+.autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 2000; max-height: 250px; overflow-y: auto; background: #fff; border: 1px solid #dee2e6; border-radius: 0 0 8px 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: none; animation: slideUpFade 0.2s ease; }
 .autocomplete-list .list-group-item { cursor: pointer; border: none; border-bottom: 1px solid #f0f0f0; padding: 10px 15px; font-size: 0.9rem; transition: background 0.1s; }
 .autocomplete-list .list-group-item:hover { background-color: #f0f7ff; color: #0d6efd; font-weight: 500; }
 
 /* =========================================
    5. CARDS DE VIAGEM
    ========================================= */
-.trip-card {
-    border: none;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s;
-    overflow: hidden;
-    background: #fff;
-    margin-bottom: 1.5rem !important;
-    border: 1px solid rgba(0,0,0,0.03);
-}
-
-.trip-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0,0,0,0.1);
-}
-
-.trip-header {
-    background: linear-gradient(135deg, #0d6efd 0%, #084298 100%);
-    color: white; padding: 12px 16px; border-bottom: 1px solid rgba(0,0,0,0.05);
-}
+.trip-card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s; overflow: hidden; background: #fff; margin-bottom: 1.5rem !important; border: 1px solid rgba(0,0,0,0.03); }
+.trip-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+.trip-header { background: linear-gradient(135deg, #0d6efd 0%, #084298 100%); color: white; padding: 12px 16px; border-bottom: 1px solid rgba(0,0,0,0.05); }
 .trip-header.bg-success { background: linear-gradient(135deg, #198754 0%, #0f5132 100%) !important; }
 .trip-header.bg-warning { background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%) !important; color: #212529; }
 .trip-header.bg-danger { background: linear-gradient(135deg, #dc3545 0%, #842029 100%) !important; }
-
-.trip-header select {
-    background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white; font-weight: 600; cursor: pointer; transition: background 0.2s;
-}
+.trip-header select { background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); color: white; font-weight: 600; cursor: pointer; transition: background 0.2s; }
 .trip-header select:hover { background-color: rgba(255, 255, 255, 0.3); }
 .trip-header select option { background-color: white; color: #333; }
-
 .trip-summary { background-color: #fbfbfb; padding: 12px 16px; border-bottom: 1px solid #ececec; font-size: 0.85rem; color: #6c757d; }
 .trip-summary strong { display: block; color: #212529; font-size: 1.1em; margin-top: 2px; }
 
@@ -126,80 +73,77 @@ html, body {
 .table-orders td { vertical-align: middle; padding: 12px 8px; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; color: #495057; }
 .table-orders tr { transition: background 0.2s; }
 .table-orders tr:hover { background-color: #f8f9fa; }
-
 .badge-index { width: 24px; height: 24px; background-color: #e9ecef; color: #6c757d; font-weight: 700; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); }
-
 .btn-remove-row { color: #dc3545; opacity: 0.5; transition: all 0.2s; background: none; border: none; padding: 6px; border-radius: 50%; }
 .btn-remove-row:hover { opacity: 1; background-color: #fee2e2; transform: rotate(90deg); }
-
 .backlog-item { border-left: 4px solid #ffc107; background: white; margin-bottom: 8px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s; }
 .backlog-item:hover { transform: translateX(3px); }
-
-/* Inputs e Scroll */
 .form-control-sm, .form-select-sm { border-radius: 6px; border: 1px solid #ced4da; padding: 8px 10px; font-size: 0.85rem; transition: border-color 0.2s, box-shadow 0.2s; }
 .form-control:focus, .form-select:focus { border-color: #86b7fe; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); }
-
-/* DATA TABLES CUSTOM */
 table.dataTable { width: 100% !important; }
 .dataTables_wrapper .dataTables_length select { padding-right: 25px; }
-
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-/* DRAG AND DROP STYLES */
-.draggable-row {
-    cursor: grab; /* Mãozinha aberta */
-}
-.draggable-row:active {
-    cursor: grabbing; /* Mãozinha fechada ao segurar */
-}
-.sortable-ghost {
-    opacity: 0.4;
-    background-color: #e9ecef;
-    border: 2px dashed #0d6efd;
-}
-.sortable-chosen {
-    background-color: #f8f9fa;
-}
-/* Melhora a área de toque no mobile */
-.draggable-row td {
-    touch-action: none; 
-}
-
-@media (max-width: 768px) { 
-    .main-layout { flex-direction: column-reverse; } 
-    .sidebar-container { width: 100%; height: 60vh; border-right: none; border-top: 4px solid #0d6efd; } 
-    .map-container { height: 40vh; } 
-    .dragbar { display: none; } 
-}
+.draggable-row { cursor: grab; }
+.draggable-row:active { cursor: grabbing; }
+.sortable-ghost { opacity: 0.4; background-color: #e9ecef; border: 2px dashed #0d6efd; }
+.sortable-chosen { background-color: #f8f9fa; }
+.draggable-row td { touch-action: none; }
+@media (max-width: 768px) { .main-layout { flex-direction: column-reverse; } .sidebar-container { width: 100%; height: 60vh; border-right: none; border-top: 4px solid #0d6efd; } .map-container { height: 40vh; } .dragbar { display: none; } }
 
 /* =========================================
    7. CORREÇÕES DE Z-INDEX (MODAIS)
    ========================================= */
-/* Garante que o fundo escuro do modal cubra a dragbar e a sidebar */
+/* Fundo dos modais normais */
 .modal-backdrop {
     z-index: 9998 !important;
 }
 
-/* Garante que o Modal fique acima de tudo (Mapa, Sidebar, Dragbar) */
+/* Modais Normais (Perfil, Config, etc) */
 .modal {
     z-index: 9999 !important;
 }
 
-/* Toast de notificação deve ficar acima até do modal se aparecer */
+/* Toast Notification (Acima de tudo) */
 .toast-container {
+    z-index: 10002 !important;
+}
+
+/* Sidebar User Info */
+#userInfoDisplay { cursor: pointer; transition: background-color 0.2s; padding: 5px; border-radius: 5px; }
+#userInfoDisplay:hover { background-color: rgba(255, 255, 255, 0.1); }
+
+/* =========================================
+   8. LOADING MODAL (CORREÇÃO DE SOBREPOSIÇÃO)
+   ========================================= */
+
+/* CORREÇÃO AQUI: Força o LoadingModal a ficar ACIMA do LoadingBackdrop */
+#loadingModal {
+    z-index: 10001 !important; 
+}
+
+/* Fundo escuro do Loading */
+#loadingBackdrop {
+    background-color: rgba(0, 0, 0, 0.8) !important;
+    backdrop-filter: blur(3px);
     z-index: 10000 !important;
 }
 
-/* Torna a área do usuário na sidebar clicável */
-#userInfoDisplay {
-    cursor: pointer;
-    transition: background-color 0.2s;
-    padding: 5px;
-    border-radius: 5px;
+/* Estilo do Box de Carregamento (Vidro Escuro) */
+#loadingModal .modal-content {
+    background-color: rgba(33, 37, 41, 0.95) !important;
+    border-radius: 1rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important;
+    padding: 1.5rem;
+    border: 1px solid rgba(255,255,255,0.1);
 }
-#userInfoDisplay:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+
+/* Texto branco com sombra para leitura */
+#loadingModal h4, 
+#loadingModal p {
+    color: #ffffff !important;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    font-weight: 600;
 }
