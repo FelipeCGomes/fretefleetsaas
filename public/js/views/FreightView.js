@@ -194,6 +194,7 @@ export class FreightView {
         });
     }
 
+    // --- RENDERIZAÇÃO DE INTERFACE ---
     renderizarResultados(cache, frota) {
         const container = document.getElementById('resultsContainer');
         if (!container || !cache) return;
@@ -220,11 +221,18 @@ export class FreightView {
             `).join('');
 
             const optionsVeiculo = frota.map(f => `<option value="${f.tipo}" ${f.tipo === v.veiculo.tipo ? 'selected' : ''}>${f.tipo}</option>`).join('');
-            const pedagioEstimado = v.rota ? (v.rota.distKm * 0.15 * v.veiculo.eixos).toFixed(2) : '0.00';
+            
+            // BLINDAGEM CONTRA ERRO 'toFixed' DE UNDEFINED
+            const distKm = v.rota && v.rota.distKm ? v.rota.distKm : 0;
+            const custoDiesel = v.rota && v.rota.custoDiesel ? v.rota.custoDiesel : 0;
+            const custoTotal = v.rota && v.rota.custoTotal ? v.rota.custoTotal : 0;
+            const ocupacao = v.ocupacaoPct || 0;
+            
+            const pedagioEstimado = (distKm * 0.15 * v.veiculo.eixos).toFixed(2);
 
             container.innerHTML += `
                 <div class="card mb-3 shadow-sm trip-card border-0" data-idx="${idx}">
-                    <div class="card-header py-2 ${v.ocupacaoPct > 100 ? 'bg-danger text-white' : 'bg-primary text-white'}">
+                    <div class="card-header py-2 ${ocupacao > 100 ? 'bg-danger text-white' : 'bg-primary text-white'}">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="fw-bold"><i class="fas fa-route"></i> Rota ${idx + 1}</div>
                             <select class="form-select form-select-sm select-vehicle-change text-dark" data-trip-idx="${idx}" style="width:120px; font-size:0.8rem;">
@@ -235,27 +243,36 @@ export class FreightView {
                     <div class="card-body p-2 bg-light">
                         <div class="row g-1 text-center mb-2 small bg-white border rounded py-1 mx-0">
                             <div class="col-3 border-end">
-                                <div class="text-muted x-small">Entregas</div><div class="fw-bold text-dark">${v.destinos.length}</div>
+                                <div class="text-muted x-small">Entregas</div>
+                                <div class="fw-bold text-dark">${v.destinos.length}</div>
                             </div>
                             <div class="col-3 border-end">
-                                <div class="text-muted x-small">Km</div><div class="fw-bold text-dark">${v.rota ? v.rota.distKm.toFixed(1) : 0}</div>
+                                <div class="text-muted x-small">Distância</div>
+                                <div class="fw-bold text-dark">${distKm.toFixed(1)} km</div>
                             </div>
                             <div class="col-3 border-end">
-                                <div class="text-muted x-small">Diesel</div><div class="fw-bold text-dark">R$ ${v.rota ? v.rota.custoDiesel.toFixed(0) : 0}</div>
+                                <div class="text-muted x-small">Diesel</div>
+                                <div class="fw-bold text-dark">R$ ${custoDiesel.toFixed(0)}</div>
                             </div>
                             <div class="col-3">
-                                <div class="text-muted x-small">Custo</div><div class="fw-bold text-success">R$ ${v.rota ? v.rota.custoTotal.toFixed(0) : 0}</div>
+                                <div class="text-muted x-small">Total</div>
+                                <div class="fw-bold text-success">R$ ${custoTotal.toFixed(0)}</div>
                             </div>
                         </div>
-                        <div class="d-flex justify-content-between px-2 mb-2 x-small text-muted">
-                            <span><i class="fas fa-weight-hanging"></i> ${v.pesoTotal}kg (${v.ocupacaoPct.toFixed(0)}%)</span>
-                            <span><i class="fas fa-road"></i> Pedágio: R$ ${pedagioEstimado}</span>
+                        
+                        <div class="d-flex justify-content-between px-2 mb-2 x-small text-muted border-top pt-1">
+                            <span><i class="fas fa-weight-hanging"></i> ${v.pesoTotal}kg (${ocupacao.toFixed(0)}%)</span>
+                            <span><i class="fas fa-road"></i> Pedágio (Est): R$ ${pedagioEstimado}</span>
                         </div>
-                        <div class="table-responsive bg-white border rounded" style="max-height: 200px; overflow-y: auto;">
-                            <table class="table table-sm table-hover mb-0 table-orders"><tbody>${destinosHtml}</tbody></table>
+
+                        <div class="table-responsive bg-white border rounded" style="max-height: 150px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0 table-orders">
+                                <tbody>${destinosHtml}</tbody>
+                            </table>
                         </div>
+                        
                         <div class="d-flex justify-content-end mt-2">
-                            <button class="btn btn-sm btn-outline-dark btn-print w-100" data-idx="${idx}"><i class="fas fa-print me-1"></i> Manifesto</button>
+                            <button class="btn btn-sm btn-outline-dark btn-print w-100" data-idx="${idx}"><i class="fas fa-print me-1"></i> Imprimir Manifesto</button>
                         </div>
                     </div>
                 </div>
@@ -264,19 +281,23 @@ export class FreightView {
 
         document.querySelectorAll('.table-orders tbody').forEach((el, tripIdx) => {
             new Sortable(el, {
-                animation: 150, ghostClass: 'bg-light', handle: '.draggable-row',
+                animation: 150,
+                ghostClass: 'bg-light',
+                handle: '.draggable-row',
                 onEnd: (evt) => {
-                    document.dispatchEvent(new CustomEvent('routeOrderChanged', { detail: { tripIdx: tripIdx, oldIdx: evt.oldIndex, newIdx: evt.newIndex } }));
+                    document.dispatchEvent(new CustomEvent('routeOrderChanged', {
+                        detail: { tripIdx: tripIdx, oldIdx: evt.oldIndex, newIdx: evt.newIndex }
+                    }));
                 }
             });
         });
     }
 
-    // --- CORREÇÃO AQUI: INPUT DE ROTA MANUAL ---
     desenharPendentes(backlog) {
         const container = document.getElementById('backlogContainer');
         const badge = document.getElementById('backlogBadge');
         if (!container) return;
+
         badge.innerText = backlog.length;
         if (backlog.length === 0) {
             container.innerHTML = '<div class="text-center text-muted mt-5 opacity-50"><i class="fas fa-check-circle fa-3x mb-3"></i><p class="small">Tudo roteirizado!</p></div>';
@@ -347,11 +368,86 @@ export class FreightView {
         });
     }
 
-    imprimirManifesto(v, i) {
+    // --- CORREÇÃO DO MANIFESTO (Tabela Completa Restaurada) ---
+    imprimirManifesto(viagem, idx) {
         const w = window.open('', '', 'width=800,height=600');
-        w.document.write(`<h3>Rota ${i + 1}</h3><ul>${v.destinos.map(d => `<li>${d.pedido} - ${d.cliente}</li>`).join('')}</ul>`);
-        w.document.close(); w.print();
+        
+        // Verifica dados para evitar erro
+        const dist = viagem.rota ? viagem.rota.distKm.toFixed(1) : '0.0';
+        const custo = viagem.rota ? viagem.rota.custoTotal.toFixed(2) : '0.00';
+        const ocupacao = viagem.ocupacaoPct ? viagem.ocupacaoPct.toFixed(1) : '0';
+
+        w.document.write(`
+            <html>
+            <head>
+                <title>Manifesto Rota ${idx + 1}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+                    th { background-color: #f2f2f2; font-weight: bold; }
+                    h2 { margin-bottom: 5px; color: #333; }
+                    .header-info { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                    .resumo { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+                </style>
+            </head>
+            <body>
+                <div class="header-info">
+                    <h2>Manifesto de Carga - Rota ${idx + 1}</h2>
+                    <div class="resumo">
+                        <div>
+                            <strong>Veículo:</strong> ${viagem.veiculo.tipo}<br>
+                            <strong>Capacidade:</strong> ${viagem.veiculo.capKg}kg
+                        </div>
+                        <div>
+                            <strong>Peso Total:</strong> ${viagem.pesoTotal}kg (${ocupacao}%)<br>
+                            <strong>Qtd. Entregas:</strong> ${viagem.destinos.length}
+                        </div>
+                        <div>
+                            <strong>Distância Est.:</strong> ${dist} km<br>
+                            <strong>Custo Est.:</strong> R$ ${custo}
+                        </div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">Seq</th>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Endereço</th>
+                            <th>Cidade/UF</th>
+                            <th style="width: 70px;">Peso (kg)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${viagem.destinos.map((d, i) => `
+                            <tr>
+                                <td>${i + 1}</td>
+                                <td>${d.pedido}</td>
+                                <td>${d.cliente}</td>
+                                <td>${d.endereco}</td>
+                                <td>${d.cidade}/${d.uf}</td>
+                                <td>${d.peso}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div style="margin-top: 30px; text-align: center; font-size: 10px; color: #666;">
+                    <p>Gerado automaticamente por FreteFleet SaaS | Data: ${new Date().toLocaleString()}</p>
+                </div>
+                <script>window.print();</script>
+            </body>
+            </html>
+        `);
+        w.document.close();
     }
 
-    setupSobre() { }
+    setupSobre() {
+        if (document.getElementById('btnOpenAbout')) {
+            document.getElementById('btnOpenAbout').onclick = () => {
+                this.showModal(`<h5>FreteCalc SaaS</h5><p>Versão 3.5 (Stable)</p><p>Desenvolvido para gestão logística.</p>`);
+            };
+        }
+    }
 }

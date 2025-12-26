@@ -190,9 +190,11 @@ export class FreightModel {
     async roteirizarViagem(viagem, config) {
         if (!viagem.origem) return { distKm: 0 };
         const pontos = [viagem.origem, ...viagem.destinos];
+        if (config.roundtrip) pontos.push(viagem.origem);
+
         const coords = pontos.map(p => `${p.lon},${p.lat}`).join(';');
         try {
-            const r = await fetch(`https://router.project-osrm.org/trip/v1/driving/${coords}?source=first&roundtrip=${config.roundtrip}&overview=full&geometries=geojson`);
+            const r = await fetch(`https://router.project-osrm.org/trip/v1/driving/${coords}?source=first&roundtrip=false&overview=full&geometries=geojson`);
             const d = await r.json();
             if (d.trips && d.trips[0]) {
                 const t = d.trips[0];
@@ -370,7 +372,6 @@ export class FreightModel {
     extrairCoordenadas(t) { if (!t) return null; const r = /(-?\d{1,2}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/; let m = t.match(r); if (!m) { const r2 = /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/; m = t.match(r2); } if (!m) { const r3 = /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/; m = t.match(r3); } return m ? { lat: parseFloat(m[1]), lon: parseFloat(m[2]) } : null; }
     lerExcel(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = e => { try { const d = new Uint8Array(e.target.result); const w = XLSX.read(d, { type: 'array' }); const s = w.Sheets[w.SheetNames[0]]; res(XLSX.utils.sheet_to_json(s, { raw: true, defval: '' })); } catch (err) { rej(err); } }; r.onerror = rej; r.readAsArrayBuffer(f); }); }
 
-    // --- CORREÇÃO AQUI (NOME CLIENTE) ---
     findValue(r, n) { const k = Object.keys(r); for (const x of n) { const f = k.find(y => y.trim().toLowerCase() === x.toLowerCase()); if (f) return r[f]; } return ''; }
 
     processarPlanilha(r) {
@@ -381,11 +382,7 @@ export class FreightModel {
             else if (typeof w === 'string') { let raw = w.trim().replace(/\./g, '').replace(',', '.'); kg = parseFloat(raw) || 0; if (kg < 50 && kg > 0) kg *= 1000; }
 
             const ped = String(this.findValue(x, ['pedido', 'nf']) || `PED-${i}`);
-
-            // --- ADICIONADO 'nome cliente', 'nome do cliente' ---
             const cli = String(this.findValue(x, ['cliente', 'destinatario', 'nome cliente', 'nome do cliente', 'razao social']) || 'Diversos');
-            // ----------------------------------------------------
-
             const sup = String(this.findValue(x, ['supervisor', 'vendedor']) || '').trim();
             const cid = String(this.findValue(x, ['cidade', 'municipio']) || '').trim();
             const uf = String(this.findValue(x, ['uf', 'estado']) || '').trim().toUpperCase();
