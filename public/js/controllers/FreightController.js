@@ -308,7 +308,6 @@ class FreightController {
         });
     }
 
-    // --- INICIALIZAÇÃO E EVENTOS ---
     init() {
         document.addEventListener('dataSynced', () => {
             this.view.renderizarListaLocais(this.model.locaisSalvos);
@@ -376,32 +375,23 @@ class FreightController {
             }
         });
 
-        // --- IMPORTAÇÃO DE PEDIDOS (CORRIGIDO LOADING) ---
         document.getElementById('excelInput')?.addEventListener('change', async e => {
             if (!e.target.files.length) return;
             try {
-                // 1. Mostra Loading imediatamente
                 this.view.setLoading(true, "Processando Planilha...");
-                // Pequeno delay para garantir que o modal apareça antes do travamento da thread
                 await new Promise(r => setTimeout(r, 200));
 
                 const json = await this.model.lerExcel(e.target.files[0]);
                 const todos = this.model.processarPlanilha ? this.model.processarPlanilha(json) : [];
                 if (todos.length === 0) throw new Error("A planilha está vazia ou ilegível.");
 
-                this.view.setLoading(false); // Esconde loading para mostrar o modal de status
-
+                this.view.setLoading(false);
                 const statusUnicos = [...new Set(todos.map(p => p.status || ''))].sort();
                 const sel = await this.view.solicitarFiltroStatus(statusUnicos);
 
-                if (!sel) {
-                    e.target.value = ''; // Limpa input se cancelar
-                    return;
-                }
+                if (!sel) { e.target.value = ''; return; }
 
-                // 2. Loading novamente para geocodificação
                 this.view.setLoading(true, "Geocodificando Endereços...");
-
                 this.todosPedidos = todos.filter(p => sel.includes(p.status || ''));
                 this.view.renderizarTabelaDados(this.todosPedidos);
 
@@ -420,13 +410,11 @@ class FreightController {
 
                 this.view.setLoading(false);
                 this.view.showToast(`${this.todosPedidos.length} pedidos carregados.`);
-
             } catch (err) {
                 this.view.setLoading(false);
                 console.error(err);
                 this.view.showModal("Erro ao processar: " + err.message);
             } finally {
-                // Importante: Limpa o input para permitir re-upload do mesmo arquivo
                 e.target.value = '';
             }
         });
@@ -455,23 +443,16 @@ class FreightController {
         }
     }
 
-    // --- CÁLCULO E ROTAS ---
     async processar() {
         const inputVal = document.getElementById('origemInput').value;
         if (!inputVal) return this.view.showModal("Informe o ponto de origem.");
         if (!this.pedidosGeocodificados.length) return this.view.showModal("Importe uma planilha primeiro.");
-
         try {
             this.view.setLoading(true, "Otimizando Rotas...");
             await new Promise(r => setTimeout(r, 500));
-
             let origem;
-            if (this.origemSelecionada && this.origemSelecionada.nome === inputVal) {
-                origem = this.origemSelecionada;
-            } else {
-                origem = await this.model.buscarCoordenadas(inputVal);
-            }
-
+            if (this.origemSelecionada && this.origemSelecionada.nome === inputVal) origem = this.origemSelecionada;
+            else origem = await this.model.buscarCoordenadas(inputVal);
             if (!origem) throw new Error("Origem não encontrada. Verifique o endereço.");
 
             const frota = this.view.obterConfigFrota(this.model.frotaDefault);
@@ -487,24 +468,14 @@ class FreightController {
             this.view.desenharPendentes(this.resultadoCache.backlog);
             this.view.desenharPendentesMap(this.resultadoCache.backlog);
 
-            // Roteirização via API (OSRM)
             for (let i = 0; i < this.resultadoCache.viagens.length; i++) {
-                // Delay para não sobrecarregar a API pública
                 await new Promise(r => setTimeout(r, 100));
                 this.resultadoCache.viagens[i].rota = await this.model.roteirizarViagem(this.resultadoCache.viagens[i], conf);
             }
-
             this.view.renderizarResultados(this.resultadoCache, this.model.frotaDefault);
+            if (this.resultadoCache.viagens.length > 0) this.view.desenharRota(this.resultadoCache.viagens[0], conf);
 
-            if (this.resultadoCache.viagens.length > 0) {
-                this.view.desenharRota(this.resultadoCache.viagens[0], conf);
-            }
-
-        } catch (e) {
-            this.view.showModal(e.message);
-        } finally {
-            this.view.setLoading(false);
-        }
+        } catch (e) { this.view.showModal(e.message); } finally { this.view.setLoading(false); }
     }
 
     async recalcularRota(idx) {
@@ -513,25 +484,24 @@ class FreightController {
             const conf = this.view.obterConfigGlobal();
             const viagem = this.resultadoCache.viagens[idx];
             if (viagem) {
-                if (viagem.destinos.length === 0) {
-                    this.resultadoCache.viagens.splice(idx, 1);
-                } else {
+                if (viagem.destinos.length === 0) this.resultadoCache.viagens.splice(idx, 1);
+                else {
                     viagem.rota = await this.model.roteirizarViagem(viagem, conf);
                     this.view.desenharRota(viagem, conf);
                 }
-                this.view.renderizarResultados(this.resultadoCache, this.model.frotaDefault);
             }
+            this.view.renderizarResultados(this.resultadoCache, this.model.frotaDefault);
         } catch (e) { } finally { this.view.setLoading(false); }
     }
 
     async handleActions(e) {
-        // A. REMOVER PEDIDO DA ROTA
+        // A. REMOVER PEDIDO
         const btnRemove = e.target.closest('.btn-remove-order');
         if (btnRemove) {
             e.stopPropagation();
             const t = +btnRemove.dataset.trip;
             const p = +btnRemove.dataset.ped;
-            if (await this.view.showConfirm("Remover pedido?")) {
+            if (await this.view.showConfirm("Remover pedido desta rota?")) {
                 const pedido = this.resultadoCache.viagens[t].destinos.splice(p, 1)[0];
                 this.resultadoCache.viagens[t].pesoTotal -= pedido.peso;
                 this.resultadoCache.backlog.push({ ...pedido, motivo: 'Removido Manualmente' });
@@ -543,7 +513,7 @@ class FreightController {
             return;
         }
 
-        // B. ADICIONAR PEDIDO MANUALMENTE (NOVO RECURSO)
+        // B. ADICIONAR MANUALMENTE (NOVO)
         const btnManualAdd = e.target.closest('.btn-manual-add');
         if (btnManualAdd) {
             e.stopPropagation();
@@ -551,7 +521,6 @@ class FreightController {
             const input = document.getElementById(`manualRoute_${pedIdx}`);
             const rotaNum = parseInt(input.value);
 
-            // Validações
             if (!rotaNum || rotaNum < 1 || !this.resultadoCache || rotaNum > this.resultadoCache.viagens.length) {
                 return this.view.showToast("Número da rota inválido.", "error");
             }
@@ -559,15 +528,12 @@ class FreightController {
             const tripIdx = rotaNum - 1;
             const viagemDestino = this.resultadoCache.viagens[tripIdx];
 
-            // Move do Backlog para a Rota
+            // Move e Recalcula
             const pedido = this.resultadoCache.backlog.splice(pedIdx, 1)[0];
             viagemDestino.destinos.push(pedido);
             viagemDestino.pesoTotal += pedido.peso;
 
-            // Feedback Visual
-            this.view.showToast(`Pedido ${pedido.pedido} movido para Rota ${rotaNum}`);
-
-            // Atualiza tudo
+            this.view.showToast(`Pedido movido para Rota ${rotaNum}`);
             this.verificarTrocaVeiculoAuto(viagemDestino);
             this.view.desenharPendentes(this.resultadoCache.backlog);
             this.view.desenharPendentesMap(this.resultadoCache.backlog);
@@ -575,14 +541,9 @@ class FreightController {
             return;
         }
 
-        // C. IMPRIMIR E SELEÇÃO DE CARD (MANTIDOS)
+        // C. AÇÕES GERAIS (Print e Click Card)
         const btnPrint = e.target.closest('.btn-print');
-        if (btnPrint) {
-            e.stopPropagation();
-            this.view.imprimirManifesto(this.resultadoCache.viagens[+btnPrint.dataset.idx], +btnPrint.dataset.idx);
-            return;
-        }
-
+        if (btnPrint) { e.stopPropagation(); this.view.imprimirManifesto(this.resultadoCache.viagens[+btnPrint.dataset.idx], +btnPrint.dataset.idx); return; }
         const card = e.target.closest('.trip-card');
         if (card && !e.target.matches('select') && !e.target.closest('button') && !e.target.matches('input')) {
             const idx = +card.dataset.idx;
@@ -593,17 +554,54 @@ class FreightController {
         }
     }
 
+    // --- NOVO: LÓGICA DE APRENDIZADO NA TROCA DE VEÍCULO ---
     async handleChangeActions(e) {
         if (e.target.classList.contains('select-vehicle-change')) {
             const idx = +e.target.dataset.tripIdx;
             const novoTipo = e.target.value;
             const viagem = this.resultadoCache.viagens[idx];
+
             if (viagem && viagem.veiculo.tipo !== novoTipo) {
                 const novoVeiculoConfig = this.model.frotaDefault.find(v => v.tipo === novoTipo);
+
                 if (novoVeiculoConfig) {
+                    // 1. Atualiza e Recalcula
                     viagem.veiculo = { ...novoVeiculoConfig };
                     viagem.ocupacaoPct = (viagem.pesoTotal / viagem.veiculo.capKg) * 100;
                     await this.recalcularRota(idx);
+
+                    // 2. Dispara o Loop de Aprendizado
+                    setTimeout(async () => {
+                        const isPaletizada = await this.view.showConfirm(
+                            `<div class="text-center">
+                                <i class="fas fa-pallet fa-3x text-primary mb-3"></i><br>
+                                <h5>Aprendizado de Frota</h5>
+                                <p>A carga é <b>Paletizada</b>?<br>Isso define preferência por <b>${novoTipo}</b>.</p>
+                            </div>`
+                        );
+
+                        let motivo = null;
+                        if (isPaletizada) {
+                            motivo = 'Carga Paletizada';
+                        } else {
+                            const isExclusivo = await this.view.showConfirm(
+                                `<div class="text-center">
+                                    <i class="fas fa-stopwatch fa-3x text-warning mb-3"></i><br>
+                                    <h5>Aprendizado de Frota</h5>
+                                    <p>É entrega <b>Agendada / Exclusiva</b>?<br>Isso fixa preferência por <b>${novoTipo}</b>.</p>
+                                </div>`
+                            );
+                            if (isExclusivo) motivo = 'Veículo Exclusivo';
+                        }
+
+                        if (motivo) {
+                            this.view.setLoading(true, "Salvando preferências...");
+                            viagem.destinos.forEach(d => this.model.aprenderPreferencia(viagem.origem, d, novoTipo, motivo));
+                            await this.model.salvarAprendizado();
+                            this.view.setLoading(false);
+                            this.view.showToast(`Preferência salva para ${viagem.destinos.length} clientes.`);
+                        }
+                    }, 500);
                 }
             }
         }
@@ -614,7 +612,7 @@ class FreightController {
         if (veiculoIdeal.tipo !== viagem.veiculo.tipo) {
             viagem.veiculo = { ...veiculoIdeal };
             viagem.ocupacaoPct = (viagem.pesoTotal / viagem.veiculo.capKg) * 100;
-            this.view.showToast(`Veículo ajustado para: ${veiculoIdeal.tipo}`);
+            this.view.showToast(`Veículo ajustado: ${veiculoIdeal.tipo}`);
         }
     }
 }
