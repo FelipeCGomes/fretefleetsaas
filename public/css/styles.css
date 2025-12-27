@@ -96,29 +96,15 @@ table.dataTable { width: 100% !important; }
 /* =========================================
    7. CORREÇÕES DE Z-INDEX (MODAIS)
    ========================================= */
-/* Fundo dos modais normais */
-.modal-backdrop {
-    z-index: 9998 !important;
-}
-
-/* Modais Normais (Perfil, Config, etc) */
-.modal {
-    z-index: 9999 !important;
-}
-
-/* Toast Notification (Acima de tudo) */
-.toast-container {
-    z-index: 10002 !important;
-}
-
-/* Sidebar User Info */
+.modal-backdrop { z-index: 9998 !important; }
+.modal { z-index: 9999 !important; }
+.toast-container { z-index: 10002 !important; }
 #userInfoDisplay { cursor: pointer; transition: background-color 0.2s; padding: 5px; border-radius: 5px; }
 #userInfoDisplay:hover { background-color: rgba(255, 255, 255, 0.1); }
 
 /* =========================================
    8. LOADING MODAL (CORREÇÃO DE SOBREPOSIÇÃO)
    ========================================= */
-
 /* CORREÇÃO AQUI: Força o LoadingModal a ficar ACIMA do LoadingBackdrop */
 #loadingModal {
     z-index: 10001 !important; 

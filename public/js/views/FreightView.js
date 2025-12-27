@@ -18,17 +18,24 @@ export class FreightView {
     }
 
     // --- FUNÇÕES GERAIS ---
-    setLoading(ativo, texto = "Carregando...") {
+    setLoading(ativo, htmlContent = "Carregando...") {
         const modal = document.getElementById('loadingModal');
         const backdrop = document.getElementById('loadingBackdrop');
         const txt = document.getElementById('loadingModalText');
+
         if (ativo) {
-            if (txt) txt.innerText = texto;
+            if (txt) txt.innerHTML = htmlContent; // Usa innerHTML para permitir formatação
             if (backdrop) backdrop.classList.remove('d-none');
-            if (modal) { modal.classList.add('show'); modal.style.display = 'block'; }
+            if (modal) {
+                modal.classList.add('show');
+                modal.style.display = 'block';
+            }
         } else {
             if (backdrop) backdrop.classList.add('d-none');
-            if (modal) { modal.classList.remove('show'); modal.style.display = 'none'; }
+            if (modal) {
+                modal.classList.remove('show');
+                modal.style.display = 'none';
+            }
         }
     }
 
@@ -221,13 +228,13 @@ export class FreightView {
             `).join('');
 
             const optionsVeiculo = frota.map(f => `<option value="${f.tipo}" ${f.tipo === v.veiculo.tipo ? 'selected' : ''}>${f.tipo}</option>`).join('');
-            
+
             // BLINDAGEM CONTRA ERRO 'toFixed' DE UNDEFINED
             const distKm = v.rota && v.rota.distKm ? v.rota.distKm : 0;
             const custoDiesel = v.rota && v.rota.custoDiesel ? v.rota.custoDiesel : 0;
             const custoTotal = v.rota && v.rota.custoTotal ? v.rota.custoTotal : 0;
             const ocupacao = v.ocupacaoPct || 0;
-            
+
             const pedagioEstimado = (distKm * 0.15 * v.veiculo.eixos).toFixed(2);
 
             container.innerHTML += `
@@ -293,6 +300,7 @@ export class FreightView {
         });
     }
 
+    // --- CORREÇÃO AQUI: INPUT DE ROTA MANUAL ---
     desenharPendentes(backlog) {
         const container = document.getElementById('backlogContainer');
         const badge = document.getElementById('backlogBadge');
@@ -368,11 +376,9 @@ export class FreightView {
         });
     }
 
-    // --- CORREÇÃO DO MANIFESTO (Tabela Completa Restaurada) ---
     imprimirManifesto(viagem, idx) {
         const w = window.open('', '', 'width=800,height=600');
-        
-        // Verifica dados para evitar erro
+
         const dist = viagem.rota ? viagem.rota.distKm.toFixed(1) : '0.0';
         const custo = viagem.rota ? viagem.rota.custoTotal.toFixed(2) : '0.00';
         const ocupacao = viagem.ocupacaoPct ? viagem.ocupacaoPct.toFixed(1) : '0';
